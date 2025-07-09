@@ -1,3 +1,5 @@
+<img src="logo.png" alt="ExfilServer Logo" width="200">
+
 # ExfilServer
 Client-side Encrypted Upload Server Python Script
 
