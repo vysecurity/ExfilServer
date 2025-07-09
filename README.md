@@ -211,4 +211,4 @@ This project is open source. Please check the repository for license details.
 
 ## Author
 
-Developed by VYSecurity for secure file collection and transfer scenarios.
+Developed by @vysecurity for secure file collection and transfer scenarios.
