@@ -15,6 +15,16 @@ ExfilServer is a secure file upload server that provides client-side encryption 
   <em>ExfilServer Web Interface - Drag & Drop File Upload with Encryption</em>
 </div>
 
+## ⚠️ Disclaimer
+
+**EDUCATIONAL PURPOSE ONLY**: This software is provided for educational, research, and authorized security testing purposes only. The author does not condone or encourage the use of this software for any illegal or malicious activities.
+
+**NO LIABILITY**: The author accepts no responsibility or liability for any damages, losses, or legal consequences that may arise from the use or misuse of this software. Users are solely responsible for ensuring their use complies with all applicable laws and regulations.
+
+**AUTHORIZED USE ONLY**: This tool should only be used on systems and networks that you own or have explicit written permission to test. Unauthorized access to computer systems is illegal in most jurisdictions.
+
+**USE AT YOUR OWN RISK**: By using this software, you acknowledge that you understand the risks involved and agree to use it responsibly and ethically.
+
 ## Features
 
 ### Security
