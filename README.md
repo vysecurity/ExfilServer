@@ -1,4 +1,6 @@
-<img src="logo.png" alt="ExfilServer Logo" width="200">
+<div align="center">
+  <img src="logo.png" alt="ExfilServer Logo" width="200">
+</div>
 
 # ExfilServer
 Client-side Encrypted Upload Server Python Script
@@ -6,6 +8,12 @@ Client-side Encrypted Upload Server Python Script
 ## Overview
 
 ExfilServer is a secure file upload server that provides client-side encryption and automatic upload functionality. It features a modern web interface with drag-and-drop support, real-time file status indicators, and XOR-based encryption for file obfuscation during transmission.
+
+<div align="center">
+  <img src="example.png" alt="ExfilServer Web Interface" width="600">
+  <br>
+  <em>ExfilServer Web Interface - Drag & Drop File Upload with Encryption</em>
+</div>
 
 ## Features
 
