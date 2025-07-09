@@ -19,6 +19,8 @@ ExfilServer is a secure file upload server that provides client-side encryption 
 
 **EDUCATIONAL PURPOSE ONLY**: This software is provided for educational, research, and authorized security testing purposes only. The author does not condone or encourage the use of this software for any illegal or malicious activities.
 
+**WEAK ENCRYPTION WARNING**: The XOR encryption used in this tool is NOT cryptographically secure and can be easily broken. Do NOT use this for protecting sensitive or confidential data. It is designed for obfuscation and educational demonstration only.
+
 **NO LIABILITY**: The author accepts no responsibility or liability for any damages, losses, or legal consequences that may arise from the use or misuse of this software. Users are solely responsible for ensuring their use complies with all applicable laws and regulations.
 
 **AUTHORIZED USE ONLY**: This tool should only be used on systems and networks that you own or have explicit written permission to test. Unauthorized access to computer systems is illegal in most jurisdictions.
@@ -191,7 +193,9 @@ python3 upload_server.py --key "C2Exfil2024" --port 8000
 ### Encryption Algorithm
 - **Method**: XOR cipher with key repetition
 - **Performance**: Fast encryption/decryption suitable for large files
-- **Security**: Provides obfuscation against casual inspection
+- **Purpose**: Primarily for obfuscation, not cryptographic security
+- **Vulnerability**: Can be brute forced using known file type headers (e.g., PNG, PDF, JPEG magic bytes)
+- **Security Level**: Provides basic obfuscation against casual inspection only
 
 ### File Handling
 - **Original Names**: Preserved through separate form fields
@@ -205,11 +209,18 @@ python3 upload_server.py --key "C2Exfil2024" --port 8000
 
 ## Security Considerations
 
+### Encryption Limitations
+- **XOR Weakness**: The XOR encryption can be easily broken by analyzing file headers
+- **Known Plaintext Attack**: Common file formats (PNG, PDF, DOCX) have predictable headers that can reveal the encryption key
+- **Not Cryptographically Secure**: This encryption should never be relied upon for protecting sensitive data
+- **Obfuscation Only**: Use only for basic traffic obfuscation, not data protection
+
 ### Production Deployment
-- Consider using HTTPS for transport encryption
-- Implement stronger encryption algorithms for sensitive data
+- **MANDATORY**: Use HTTPS for transport encryption in production environments
+- **CRITICAL**: Implement stronger encryption algorithms (AES, ChaCha20) for sensitive data
 - Add authentication and authorization mechanisms
 - Monitor and log access attempts
+- Consider this tool as a proof-of-concept for educational purposes only
 
 ### Key Management
 - Use strong, unique keys for different deployments
