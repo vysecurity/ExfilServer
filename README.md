@@ -36,6 +36,26 @@ ExfilServer is a secure file upload server that provides client-side encryption 
 - **Error Handling**: Comprehensive error reporting and validation
 - **Cross-platform**: Works on any system with Python 3
 
+## Stealth Features
+
+### File Chunking
+- **Configurable Chunking**: Split files into 1-1000 chunks for covert transfer
+- **Automatic Reassembly**: Server automatically reconstructs files from received chunks
+- **Traffic Obfuscation**: Large files appear as multiple small transfers
+- **Evasion Capability**: Bypass file size restrictions and detection systems
+
+### Chunk Upload Delays
+- **Configurable Delays**: Set delays between chunk uploads (0-10,000ms)
+- **Traffic Shaping**: Control upload rate to avoid network anomaly detection
+- **Stealth Timing**: Mimic normal user behavior with realistic upload patterns
+- **Load Distribution**: Spread transfers over time to reduce server load spikes
+
+### Operational Benefits
+- **Detection Avoidance**: Chunked transfers with delays appear as normal web traffic
+- **Network Resilience**: Failed chunks can be retransmitted without restarting entire upload
+- **Bandwidth Management**: Control network utilization to maintain operational security
+- **Covert Channels**: Establish low-profile data exfiltration channels
+
 ## Installation
 
 1. Clone the repository:
@@ -67,17 +87,22 @@ python3 upload_server.py --key "SecureKey456" --port 9000
 
 1. Open your browser and navigate to `http://localhost:8000`
 2. Enter an encryption key in the password field
-3. Either:
+3. **Configure stealth options** (optional):
+   - Set "Number of Chunks" (1-1000) to split files for covert transfer
+   - Set "Delay Between Chunks" (0-10,000ms) to control upload timing
+4. Either:
    - Click "Select files" to choose files manually, then click "Upload"
    - Drag and drop files directly into the drop area for automatic upload
 
 ### File Processing Flow
 
 1. **Client**: User enters encryption key and selects/drops files
-2. **Encryption**: Files are encrypted in the browser using XOR cipher
-3. **Upload**: Encrypted files are transmitted to the server
-4. **Decryption**: Server decrypts files using the specified server key
-5. **Storage**: Decrypted files are saved with original filenames
+2. **Chunking**: Files are optionally split into specified number of chunks
+3. **Encryption**: Files/chunks are encrypted in the browser using XOR cipher
+4. **Upload**: Encrypted files/chunks are transmitted with optional delays
+5. **Reassembly**: Server automatically reconstructs chunked files
+6. **Decryption**: Server decrypts files using the specified server key
+7. **Storage**: Decrypted files are saved with original filenames
 
 ## Security Model
 
