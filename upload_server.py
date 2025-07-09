@@ -135,6 +135,11 @@ class UploadHandler(BaseHTTPRequestHandler):
                 <input type="number" id="chunk-count" value="1" min="1" max="1000" placeholder="Number of chunks" style="width: 100%; max-width: 300px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                 <small style="color: #666; display: block; margin-top: 2px;">Split each file into this many chunks (1 = no chunking)</small>
             </div>
+            <div style="margin-bottom: 15px;">
+                <label for="chunk-delay" style="display: block; margin-bottom: 5px; font-weight: bold;">Delay Between Chunks (ms):</label>
+                <input type="number" id="chunk-delay" value="0" min="0" max="10000" placeholder="Delay in milliseconds" style="width: 100%; max-width: 300px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                <small style="color: #666; display: block; margin-top: 2px;">Delay between chunk uploads to control upload rate</small>
+            </div>
             <form id="form" enctype="multipart/form-data" method="post">
                 <input type="file" id="fileElem" name="file" multiple>
                 <label class="btn" for="fileElem">Select files</label>
@@ -164,6 +169,15 @@ class UploadHandler(BaseHTTPRequestHandler):
             function getChunkCount() {
                 const chunkInput = document.getElementById('chunk-count');
                 return parseInt(chunkInput.value) || 1;
+            }
+
+            function getChunkDelay() {
+                const delayInput = document.getElementById('chunk-delay');
+                return parseInt(delayInput.value) || 0;
+            }
+
+            function sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
             }
 
             // Simple XOR encryption for client-side obfuscation
@@ -256,6 +270,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             async function uploadFiles(files) {
                   const encryptionKey = getEncryptionKey();
                   const chunkCount = getChunkCount();
+                  const chunkDelay = getChunkDelay();
                   
                   if (!encryptionKey) {
                       statusDiv.innerHTML = 'Please enter an encryption key!';
@@ -264,7 +279,8 @@ class UploadHandler(BaseHTTPRequestHandler):
                   }
                   
                   dropArea.classList.add('uploading');
-                  statusDiv.innerHTML = `Processing ${files.length} file(s) with ${chunkCount} chunk(s) each...`;
+                  const delayText = chunkDelay > 0 ? ` (${chunkDelay}ms delay)` : '';
+                  statusDiv.innerHTML = `Processing ${files.length} file(s) with ${chunkCount} chunk(s) each${delayText}...`;
                   statusDiv.style.color = '';
                   
                   try {
@@ -297,8 +313,8 @@ class UploadHandler(BaseHTTPRequestHandler):
                               // Chunked upload
                               const chunks = splitFileIntoChunks(file, chunkCount);
                               updateFileStatus(i, `Encrypting ${chunks.length} chunks...`, '#ff6b35');
-                              
-                              for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+                               
+                               for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
                                   const chunk = chunks[chunkIndex];
                                   const encryptedChunk = await encryptFileChunk(chunk, encryptionKey, file.name, chunkIndex, chunks.length);
                                   
@@ -318,6 +334,11 @@ class UploadHandler(BaseHTTPRequestHandler):
                                   if (!res.ok) {
                                       updateFileStatus(i, `Failed at chunk ${chunkIndex + 1}`, '#dc3545');
                                       throw new Error(`Failed to upload chunk ${chunkIndex + 1} of ${file.name}`);
+                                  }
+                                  
+                                  // Add delay between chunks if specified
+                                  if (chunkDelay > 0 && chunkIndex < chunks.length - 1) {
+                                      await sleep(chunkDelay);
                                   }
                               }
                               
