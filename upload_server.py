@@ -53,6 +53,43 @@ def encrypt_file_data(file_data):
         print(f"Encryption error: {e}")
         return None
 
+def encrypt_filename(filename):
+    """Encrypt filename using XOR with server key"""
+    try:
+        if SERVER_KEY is None:
+            return filename
+            
+        key_bytes = SERVER_KEY.encode()
+        filename_bytes = filename.encode('utf-8')
+        encrypted = bytearray()
+        
+        for i, byte in enumerate(filename_bytes):
+            encrypted.append(byte ^ key_bytes[i % len(key_bytes)])
+        
+        # Convert to hex string for safe transmission
+        return encrypted.hex()
+    except Exception as e:
+        print(f"Filename encryption error: {e}")
+        return filename
+
+def decrypt_filename(encrypted_hex):
+    """Decrypt filename from hex string using XOR with server key"""
+    try:
+        if SERVER_KEY is None:
+            return encrypted_hex
+            
+        key_bytes = SERVER_KEY.encode()
+        encrypted_bytes = bytes.fromhex(encrypted_hex)
+        decrypted = bytearray()
+        
+        for i, byte in enumerate(encrypted_bytes):
+            decrypted.append(byte ^ key_bytes[i % len(key_bytes)])
+        
+        return decrypted.decode('utf-8')
+    except Exception as e:
+        print(f"Filename decryption error: {e}")
+        return encrypted_hex
+
 def reassemble_chunks(original_filename, total_chunks):
     """Reassemble chunks into the original file"""
     try:
@@ -100,7 +137,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             self.handle_main_page()
     
     def handle_file_list(self):
-        """Return JSON list of uploaded files"""
+        """Return JSON list of uploaded files with encrypted filenames"""
         try:
             files = []
             if os.path.exists(UPLOAD_DIR):
@@ -109,8 +146,10 @@ class UploadHandler(BaseHTTPRequestHandler):
                         filepath = os.path.join(UPLOAD_DIR, filename)
                         if os.path.isfile(filepath):
                             file_size = os.path.getsize(filepath)
+                            encrypted_name = encrypt_filename(filename)
                             files.append({
-                                'name': filename,
+                                'name': encrypted_name,
+                                'original_name': filename,  # Keep for server-side reference
                                 'size': file_size,
                                 'size_kb': round(file_size / 1024, 1)
                             })
@@ -123,9 +162,11 @@ class UploadHandler(BaseHTTPRequestHandler):
             print(f"Error listing files: {e}")
             self.send_error(500, "Failed to list files")
     
-    def handle_file_download(self, filename):
+    def handle_file_download(self, encrypted_filename):
         """Handle file download with server-side encryption"""
         try:
+            # Decrypt the filename first
+            filename = decrypt_filename(encrypted_filename)
             # Sanitize filename to prevent directory traversal
             filename = os.path.basename(filename)
             filepath = os.path.join(UPLOAD_DIR, filename)
@@ -320,6 +361,24 @@ class UploadHandler(BaseHTTPRequestHandler):
                 }
                 
                 return decrypted;
+            }
+
+            // Decrypt filename from hex string using XOR
+            function decryptFilename(encryptedHex, key) {
+                try {
+                    const keyBytes = new TextEncoder().encode(key);
+                    const encryptedBytes = new Uint8Array(encryptedHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                    const decrypted = new Uint8Array(encryptedBytes.length);
+                    
+                    for (let i = 0; i < encryptedBytes.length; i++) {
+                        decrypted[i] = encryptedBytes[i] ^ keyBytes[i % keyBytes.length];
+                    }
+                    
+                    return new TextDecoder().decode(decrypted);
+                } catch (error) {
+                    console.error('Filename decryption error:', error);
+                    return encryptedHex; // Return original if decryption fails
+                }
             }
 
             async function encryptFile(file, key) {
@@ -518,17 +577,31 @@ class UploadHandler(BaseHTTPRequestHandler):
                 }
                 
                 availableFiles.forEach((file, index) => {
+                    const downloadKey = getDownloadKey();
+                    let displayName = file.name;
+                    
+                    // Try to decrypt filename for display if download key is provided
+                    if (downloadKey) {
+                        try {
+                            displayName = decryptFilename(file.name, downloadKey);
+                        } catch (error) {
+                            displayName = '[Encrypted: ' + file.name.substring(0, 16) + '...]';
+                        }
+                    } else {
+                        displayName = '[Encrypted: ' + file.name.substring(0, 16) + '...]';
+                    }
+                    
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item';
                     fileItem.innerHTML = `
-                        <span>${file.name} (${file.size_kb} KB)</span>
-                        <button onclick="downloadFile('${file.name}')" class="btn" style="float: right; padding: 5px 10px; font-size: 12px;">Download</button>
+                        <span>${displayName} (${file.size_kb} KB)</span>
+                        <button onclick="downloadFile('${file.name}', '${displayName}')" class="btn" style="float: right; padding: 5px 10px; font-size: 12px;">Download</button>
                     `;
                     availableFilesDiv.appendChild(fileItem);
                 });
             }
 
-            async function downloadFile(filename) {
+            async function downloadFile(encryptedFilename, displayName) {
                 const downloadKey = getDownloadKey();
                 
                 if (!downloadKey) {
@@ -538,34 +611,37 @@ class UploadHandler(BaseHTTPRequestHandler):
                 }
                 
                 try {
-                    downloadStatusDiv.innerHTML = `Downloading ${filename}...`;
+                    // Decrypt the filename to get the original name for saving
+                    const originalFilename = decryptFilename(encryptedFilename, downloadKey);
+                    
+                    downloadStatusDiv.innerHTML = `Downloading ${displayName}...`;
                     downloadStatusDiv.style.color = '';
                     
-                    // Download encrypted file
-                    const response = await fetch(`/download/${encodeURIComponent(filename)}`);
+                    // Download encrypted file using the encrypted filename
+                    const response = await fetch(`/download/${encodeURIComponent(encryptedFilename)}`);
                     if (!response.ok) {
                         throw new Error(`Download failed: ${response.status} ${response.statusText}`);
                     }
                     
                     const encryptedData = await response.arrayBuffer();
                     
-                    downloadStatusDiv.innerHTML = `Decrypting ${filename}...`;
+                    downloadStatusDiv.innerHTML = `Decrypting ${displayName}...`;
                     
                     // Decrypt the file
                     const decryptedData = decryptData(encryptedData, downloadKey);
                     
-                    // Create and trigger download
+                    // Create and trigger download with original filename
                     const blob = new Blob([decryptedData]);
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = filename;
+                    a.download = originalFilename;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
                     
-                    downloadStatusDiv.innerHTML = `Successfully downloaded ${filename}`;
+                    downloadStatusDiv.innerHTML = `Successfully downloaded ${displayName}`;
                     downloadStatusDiv.style.color = '#28a745';
                     
                 } catch (error) {
@@ -576,6 +652,13 @@ class UploadHandler(BaseHTTPRequestHandler):
 
             // Load file list on page load
             window.addEventListener('load', refreshFileList);
+            
+            // Refresh file list when download key changes to show decrypted filenames
+            document.getElementById('download-key').addEventListener('input', function() {
+                if (availableFiles && availableFiles.length > 0) {
+                    displayFileList();
+                }
+            });
 
             ;['dragenter', 'dragover'].forEach(event => {
                 dropArea.addEventListener(event, e => {
