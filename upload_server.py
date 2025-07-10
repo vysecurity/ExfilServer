@@ -1,3 +1,24 @@
+#!/usr/bin/env python3
+"""
+ExfilServer - Secure File Upload Server with Encryption
+
+SECURITY FIXES IMPLEMENTED:
+- Filename sanitization to prevent directory traversal attacks
+- Path validation to ensure files stay within designated directories
+- File extension validation against whitelist
+- File size limits to prevent resource exhaustion
+- Input validation for chunk parameters
+- Security event logging for monitoring
+- Protection against reserved filename attacks
+- Client IP tracking for security events
+
+VULNERABILITIES ADDRESSED:
+- CVE-like: Local File Inclusion (LFI) via path traversal
+- CVE-like: Arbitrary file write via malicious filenames
+- CVE-like: Resource exhaustion via large file uploads
+- CVE-like: Filename injection attacks
+"""
+
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import os
 import re
@@ -5,17 +26,95 @@ import sys
 import argparse
 import json
 import urllib.parse
+import string
+import datetime
 
 UPLOAD_DIR = "./uploads"
 CHUNK_DIR = "./chunks"
 PORT = 8000
 SERVER_KEY = None  # Will be set from command line argument
 
+# Security configuration
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB limit
+MAX_FILENAME_LENGTH = 255
+ALLOWED_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', 
+                     '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.zip', '.rar', '.7z',
+                     '.mp3', '.mp4', '.avi', '.mov', '.csv', '.json', '.xml'}  # Add more as needed
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(CHUNK_DIR, exist_ok=True)
 
 # Dictionary to track chunk uploads
 chunk_tracker = {}
+
+def log_security_event(event_type, details, client_ip="unknown"):
+    """Log security events for monitoring"""
+    timestamp = datetime.datetime.now().isoformat()
+    log_message = f"[{timestamp}] SECURITY EVENT - {event_type}: {details} (Client: {client_ip})"
+    print(log_message)
+    # In production, this should write to a proper log file
+    try:
+        with open("security.log", "a") as log_file:
+            log_file.write(log_message + "\n")
+    except Exception:
+        pass  # Don't fail if logging fails
+
+def validate_file_extension(filename):
+    """Validate file extension against allowed list"""
+    if not filename:
+        return False
+    
+    _, ext = os.path.splitext(filename.lower())
+    return ext in ALLOWED_EXTENSIONS
+
+def sanitize_filename(filename):
+    """Sanitize filename to prevent directory traversal and other security issues"""
+    if not filename:
+        return "unnamed_file"
+    
+    # Remove path components and keep only the basename
+    filename = os.path.basename(filename)
+    
+    # Remove or replace dangerous characters
+    filename = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', filename)
+    
+    # Remove leading/trailing dots and spaces
+    filename = filename.strip('. ')
+    
+    # Prevent reserved names on Windows
+    reserved_names = ['CON', 'PRN', 'AUX', 'NUL'] + [f'COM{i}' for i in range(1, 10)] + [f'LPT{i}' for i in range(1, 10)]
+    if filename.upper() in reserved_names:
+        filename = f"file_{filename}"
+    
+    # Prevent empty filenames or just dots
+    if not filename or filename in ['.', '..']:
+        filename = 'unnamed_file'
+    
+    # Limit filename length
+    if len(filename) > MAX_FILENAME_LENGTH:
+        name, ext = os.path.splitext(filename)
+        filename = name[:MAX_FILENAME_LENGTH-10-len(ext)] + ext
+    
+    return filename
+
+def validate_chunk_params(chunk_index, total_chunks):
+    """Validate chunk parameters to prevent abuse"""
+    try:
+        chunk_index = int(chunk_index)
+        total_chunks = int(total_chunks)
+        
+        if chunk_index < 0 or total_chunks < 1:
+            return False, "Invalid chunk parameters"
+        
+        if chunk_index >= total_chunks:
+            return False, "Chunk index exceeds total chunks"
+        
+        if total_chunks > 10000:  # Reasonable limit
+            return False, "Too many chunks"
+        
+        return True, (chunk_index, total_chunks)
+    except (ValueError, TypeError):
+        return False, "Invalid chunk parameter format"
 
 def decrypt_file_data(encrypted_data):
     """Decrypt file data using XOR with server key"""
@@ -93,16 +192,27 @@ def decrypt_filename(encrypted_hex):
 def reassemble_chunks(original_filename, total_chunks):
     """Reassemble chunks into the original file"""
     try:
+        # Sanitize filename to prevent directory traversal
+        safe_filename = sanitize_filename(original_filename)
+        
         chunk_files = []
         for i in range(total_chunks):
-            chunk_path = os.path.join(CHUNK_DIR, f"{original_filename}.chunk{i}")
+            # Use sanitized filename for chunk paths
+            chunk_path = os.path.join(CHUNK_DIR, f"{safe_filename}.chunk{i}")
             if not os.path.exists(chunk_path):
-                print(f"Missing chunk {i} for {original_filename}")
+                print(f"Missing chunk {i} for {safe_filename}")
                 return False
             chunk_files.append(chunk_path)
         
-        # Reassemble the file
-        output_path = os.path.join(UPLOAD_DIR, original_filename)
+        # Reassemble the file with sanitized filename
+        output_path = os.path.join(UPLOAD_DIR, safe_filename)
+        
+        # Ensure the output path is within the upload directory
+        if not os.path.abspath(output_path).startswith(os.path.abspath(UPLOAD_DIR)):
+            log_security_event("PATH_TRAVERSAL_ATTEMPT", f"Attempted path traversal in reassemble_chunks: {original_filename} -> {output_path}")
+            print(f"Security violation: attempted path traversal for {original_filename}")
+            return False
+        
         with open(output_path, 'wb') as output_file:
             for chunk_path in chunk_files:
                 with open(chunk_path, 'rb') as chunk_file:
@@ -112,11 +222,11 @@ def reassemble_chunks(original_filename, total_chunks):
         for chunk_path in chunk_files:
             os.remove(chunk_path)
         
-        # Remove from tracker
+        # Remove from tracker (use original filename as key)
         if original_filename in chunk_tracker:
             del chunk_tracker[original_filename]
         
-        print(f"Successfully reassembled {original_filename} from {total_chunks} chunks")
+        print(f"Successfully reassembled {safe_filename} from {total_chunks} chunks")
         return True
     except Exception as e:
         print(f"Error reassembling chunks for {original_filename}: {e}")
@@ -772,6 +882,29 @@ class UploadHandler(BaseHTTPRequestHandler):
                 self.send_error(400, "Missing required fields")
                 return
             
+            # Sanitize filename to prevent directory traversal
+            safe_filename = sanitize_filename(original_name)
+            if not safe_filename:
+                log_security_event("INVALID_FILENAME", f"Invalid filename rejected: {original_name}", self.client_address[0])
+                self.send_error(400, "Invalid filename")
+                return
+            
+            # Log if filename was modified during sanitization
+            if safe_filename != original_name:
+                log_security_event("FILENAME_SANITIZED", f"Filename sanitized: '{original_name}' -> '{safe_filename}'", self.client_address[0])
+            
+            # Validate file extension
+            if not validate_file_extension(safe_filename):
+                log_security_event("INVALID_FILE_EXTENSION", f"File extension not allowed: {safe_filename}", self.client_address[0])
+                self.send_error(400, "File extension not allowed")
+                return
+            
+            # Check file size limit
+            if len(file_data) > MAX_FILE_SIZE:
+                log_security_event("FILE_SIZE_EXCEEDED", f"File size exceeded limit: {len(file_data)} bytes for {safe_filename}", self.client_address[0])
+                self.send_error(400, f"File size exceeds limit of {MAX_FILE_SIZE // (1024*1024)}MB")
+                return
+            
             # Decrypt the file data
             decrypted_data = decrypt_file_data(file_data)
             if decrypted_data is None:
@@ -779,44 +912,68 @@ class UploadHandler(BaseHTTPRequestHandler):
                 return
             
             if chunk_index is not None and total_chunks is not None:
-                # Handle chunked upload
-                chunk_index = int(chunk_index)
-                total_chunks = int(total_chunks)
+                # Validate chunk parameters
+                is_valid, result = validate_chunk_params(chunk_index, total_chunks)
+                if not is_valid:
+                    self.send_error(400, f"Invalid chunk parameters: {result}")
+                    return
                 
-                # Initialize chunk tracker for this file
+                chunk_index, total_chunks = result
+                
+                # Initialize chunk tracker for this file (use original name as key)
                 if original_name not in chunk_tracker:
                     chunk_tracker[original_name] = {
                         'total_chunks': total_chunks,
-                        'received_chunks': set()
+                        'received_chunks': set(),
+                        'safe_filename': safe_filename
                     }
                 
-                # Save chunk
-                chunk_path = os.path.join(CHUNK_DIR, f"{original_name}.chunk{chunk_index}")
+                # Verify chunk parameters match previous chunks
+                if chunk_tracker[original_name]['total_chunks'] != total_chunks:
+                    self.send_error(400, "Chunk count mismatch")
+                    return
+                
+                # Save chunk with sanitized filename
+                chunk_path = os.path.join(CHUNK_DIR, f"{safe_filename}.chunk{chunk_index}")
+                
+                # Ensure the chunk path is within the chunk directory
+                if not os.path.abspath(chunk_path).startswith(os.path.abspath(CHUNK_DIR)):
+                    log_security_event("PATH_TRAVERSAL_ATTEMPT", f"Attempted path traversal in chunk upload: {chunk_path}", self.client_address[0])
+                    self.send_error(400, "Security violation: invalid chunk path")
+                    return
+                
                 with open(chunk_path, 'wb') as f:
                     f.write(decrypted_data)
                 
                 # Track received chunk
                 chunk_tracker[original_name]['received_chunks'].add(chunk_index)
                 
-                print(f"Received chunk {chunk_index + 1}/{total_chunks} for {original_name}")
+                print(f"Received chunk {chunk_index + 1}/{total_chunks} for {safe_filename}")
                 
                 # Check if all chunks received
                 if len(chunk_tracker[original_name]['received_chunks']) == total_chunks:
                     if reassemble_chunks(original_name, total_chunks):
-                        response_msg = f"File {original_name} successfully assembled from {total_chunks} chunks"
+                        response_msg = f"File {safe_filename} successfully assembled from {total_chunks} chunks"
                     else:
-                        response_msg = f"Failed to assemble {original_name}"
+                        response_msg = f"Failed to assemble {safe_filename}"
                         self.send_error(500, response_msg)
                         return
                 else:
-                    response_msg = f"Chunk {chunk_index + 1}/{total_chunks} received for {original_name}"
+                    response_msg = f"Chunk {chunk_index + 1}/{total_chunks} received for {safe_filename}"
             else:
-                # Handle regular upload (no chunking)
-                out_path = os.path.join(UPLOAD_DIR, original_name)
+                # Handle regular upload (no chunking) with sanitized filename
+                out_path = os.path.join(UPLOAD_DIR, safe_filename)
+                
+                # Ensure the output path is within the upload directory
+                if not os.path.abspath(out_path).startswith(os.path.abspath(UPLOAD_DIR)):
+                    log_security_event("PATH_TRAVERSAL_ATTEMPT", f"Attempted path traversal in file upload: {out_path}", self.client_address[0])
+                    self.send_error(400, "Security violation: invalid upload path")
+                    return
+                
                 with open(out_path, 'wb') as f:
                     f.write(decrypted_data)
                 
-                response_msg = f"File {original_name} uploaded successfully"
+                response_msg = f"File {safe_filename} uploaded successfully"
             
             self.send_response(200)
             self.end_headers()
