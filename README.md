@@ -156,7 +156,7 @@ python3 upload_server.py --key "SecureKey456" --port 9000
 <div align="center">
   <img src="diagram.png" alt="ExfilServer Data Flow Diagram" width="800">
   <br>
-  <em>Complete data flow diagram showing upload and download processes with encryption workflows</em>
+  <em>Data flow diagram showing upload process with encryption workflow</em>
 </div>
 
 ## Security Model
