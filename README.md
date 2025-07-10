@@ -151,6 +151,14 @@ python3 upload_server.py --key "SecureKey456" --port 9000
 6. **Client Decryption**: Browser decrypts both filename and file contents
 7. **File Save**: Decrypted file is saved with original filename
 
+### Data Flow Diagram
+
+<div align="center">
+  <img src="diagram.png" alt="ExfilServer Data Flow Diagram" width="800">
+  <br>
+  <em>Complete data flow diagram showing upload and download processes with encryption workflows</em>
+</div>
+
 ## Security Model
 
 ### Encryption Process
