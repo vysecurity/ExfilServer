@@ -5,7 +5,7 @@ ExfilServer - Secure File Upload Server with Encryption
 SECURITY FIXES IMPLEMENTED:
 - Filename sanitization to prevent directory traversal attacks
 - Path validation to ensure files stay within designated directories
-- File extension validation against whitelist
+- File extension validation (DISABLED - allows all file types)
 - File size limits to prevent resource exhaustion
 - Input validation for chunk parameters
 - Security event logging for monitoring
@@ -37,9 +37,7 @@ SERVER_KEY = None  # Will be set from command line argument
 # Security configuration
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB limit
 MAX_FILENAME_LENGTH = 255
-ALLOWED_EXTENSIONS = {'.txt', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', 
-                     '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.zip', '.rar', '.7z',
-                     '.mp3', '.mp4', '.avi', '.mov', '.csv', '.json', '.xml'}  # Add more as needed
+ALLOWED_EXTENSIONS = None  # Allow all file types - set to None to disable extension filtering
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(CHUNK_DIR, exist_ok=True)
@@ -63,6 +61,10 @@ def validate_file_extension(filename):
     """Validate file extension against allowed list"""
     if not filename:
         return False
+    
+    # If ALLOWED_EXTENSIONS is None, allow all file types
+    if ALLOWED_EXTENSIONS is None:
+        return True
     
     _, ext = os.path.splitext(filename.lower())
     return ext in ALLOWED_EXTENSIONS
