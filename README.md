@@ -48,6 +48,14 @@ ExfilServer is a secure file upload server that provides client-side encryption 
 - **Error Handling**: Comprehensive error reporting and validation
 - **Cross-platform**: Works on any system with Python 3
 
+### Download & File Management
+- **Encrypted File Listing**: Server provides encrypted filenames for enhanced privacy
+- **Secure Downloads**: Files are re-encrypted server-side before transmission
+- **Client-side Decryption**: Downloaded files are decrypted in the browser using user-specified keys
+- **Real-time Filename Decryption**: Filenames decrypt automatically when correct key is entered
+- **Bidirectional Encryption**: Both upload and download processes use encryption
+- **Manual File Deletion**: Users must manually delete files from the server's uploads folder
+
 ## Stealth Features
 
 ### File Chunking
@@ -97,6 +105,7 @@ python3 upload_server.py --key "SecureKey456" --port 9000
 
 ### Web Interface
 
+#### File Upload
 1. Open your browser and navigate to `http://localhost:8000`
 2. Enter an encryption key in the password field
 3. **Configure stealth options** (optional):
@@ -106,8 +115,25 @@ python3 upload_server.py --key "SecureKey456" --port 9000
    - Click "Select files" to choose files manually, then click "Upload"
    - Drag and drop files directly into the drop area for automatic upload
 
+#### File Download
+1. Navigate to the **Download Files** section on the same web interface
+2. Enter a decryption key in the "Decryption Key" field
+3. Click "Refresh File List" to load available files
+4. **Filename Display**:
+   - Without key: Files show as `[Encrypted: abc123def456...]`
+   - With correct key: Files show actual names like `document.pdf`
+   - With wrong key: Files remain encrypted, indicating incorrect key
+5. Click "Download" next to any file to download and decrypt it
+6. Files are automatically decrypted in the browser and saved with original names
+
+#### File Management
+- **File Deletion**: To remove files from the server, manually delete them from the `uploads/` folder on the server filesystem
+- **No Web-based Deletion**: The web interface does not provide file deletion capabilities for security reasons
+- **Server Access Required**: File cleanup must be performed by someone with direct server access
+
 ### File Processing Flow
 
+#### Upload Process
 1. **Client**: User enters encryption key and selects/drops files
 2. **Chunking**: Files are optionally split into specified number of chunks
 3. **Encryption**: Files/chunks are encrypted in the browser using XOR cipher
@@ -115,6 +141,15 @@ python3 upload_server.py --key "SecureKey456" --port 9000
 5. **Reassembly**: Server automatically reconstructs chunked files
 6. **Decryption**: Server decrypts files using the specified server key
 7. **Storage**: Decrypted files are saved with original filenames
+
+#### Download Process
+1. **File Listing**: Client requests file list via `/files` endpoint
+2. **Filename Encryption**: Server encrypts all filenames before sending to client
+3. **Client Display**: Browser shows encrypted filenames or decrypts them if key is provided
+4. **Download Request**: Client requests specific file via `/download/<encrypted_filename>`
+5. **Server Encryption**: Server encrypts file contents before transmission
+6. **Client Decryption**: Browser decrypts both filename and file contents
+7. **File Save**: Decrypted file is saved with original filename
 
 ## Security Model
 
@@ -201,6 +236,14 @@ python3 upload_server.py --key "C2Exfil2024" --port 8000
 - **Original Names**: Preserved through separate form fields
 - **Binary Support**: Handles all file types (images, documents, executables)
 - **Size Limits**: Constrained only by available memory and disk space
+- **Filename Encryption**: Filenames encrypted using XOR with hex encoding for safe transmission
+- **Bidirectional Processing**: Both upload and download paths include encryption/decryption
+
+### API Endpoints
+- **`GET /`**: Main web interface with upload and download functionality
+- **`GET /files`**: Returns JSON list of uploaded files with encrypted filenames
+- **`GET /download/<encrypted_filename>`**: Downloads specific file with server-side encryption
+- **`POST /`**: Handles file uploads with multipart form data and chunking support
 
 ### Browser Compatibility
 - **Modern Browsers**: Chrome, Firefox, Safari, Edge
