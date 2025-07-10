@@ -105,7 +105,7 @@ class UploadHandler(BaseHTTPRequestHandler):
             files = []
             if os.path.exists(UPLOAD_DIR):
                 for filename in os.listdir(UPLOAD_DIR):
-                    if filename != '.gitkeep':  # Skip .gitkeep file
+                    if not filename.startswith('.'):  # Skip all dot files (.gitkeep, .DS_Store, etc.)
                         filepath = os.path.join(UPLOAD_DIR, filename)
                         if os.path.isfile(filepath):
                             file_size = os.path.getsize(filepath)
