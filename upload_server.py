@@ -3,6 +3,8 @@ import os
 import re
 import sys
 import argparse
+import json
+import urllib.parse
 
 UPLOAD_DIR = "./uploads"
 CHUNK_DIR = "./chunks"
@@ -31,6 +33,24 @@ def decrypt_file_data(encrypted_data):
         return bytes(decrypted)
     except Exception as e:
         print(f"Decryption error: {e}")
+        return None
+
+def encrypt_file_data(file_data):
+    """Encrypt file data using XOR with server key for download"""
+    try:
+        if SERVER_KEY is None:
+            print("Server key not set")
+            return None
+            
+        key_bytes = SERVER_KEY.encode()
+        encrypted = bytearray()
+        
+        for i, byte in enumerate(file_data):
+            encrypted.append(byte ^ key_bytes[i % len(key_bytes)])
+        
+        return bytes(encrypted)
+    except Exception as e:
+        print(f"Encryption error: {e}")
         return None
 
 def reassemble_chunks(original_filename, total_chunks):
@@ -67,6 +87,77 @@ def reassemble_chunks(original_filename, total_chunks):
 
 class UploadHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        # Parse the URL path
+        parsed_path = urllib.parse.urlparse(self.path)
+        path = parsed_path.path
+        
+        if path == '/files':
+            self.handle_file_list()
+        elif path.startswith('/download/'):
+            filename = path[10:]  # Remove '/download/' prefix
+            self.handle_file_download(filename)
+        else:
+            self.handle_main_page()
+    
+    def handle_file_list(self):
+        """Return JSON list of uploaded files"""
+        try:
+            files = []
+            if os.path.exists(UPLOAD_DIR):
+                for filename in os.listdir(UPLOAD_DIR):
+                    if filename != '.gitkeep':  # Skip .gitkeep file
+                        filepath = os.path.join(UPLOAD_DIR, filename)
+                        if os.path.isfile(filepath):
+                            file_size = os.path.getsize(filepath)
+                            files.append({
+                                'name': filename,
+                                'size': file_size,
+                                'size_kb': round(file_size / 1024, 1)
+                            })
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(files).encode())
+        except Exception as e:
+            print(f"Error listing files: {e}")
+            self.send_error(500, "Failed to list files")
+    
+    def handle_file_download(self, filename):
+        """Handle file download with server-side encryption"""
+        try:
+            # Sanitize filename to prevent directory traversal
+            filename = os.path.basename(filename)
+            filepath = os.path.join(UPLOAD_DIR, filename)
+            
+            if not os.path.exists(filepath):
+                self.send_error(404, "File not found")
+                return
+            
+            # Read and encrypt the file
+            with open(filepath, 'rb') as f:
+                file_data = f.read()
+            
+            encrypted_data = encrypt_file_data(file_data)
+            if encrypted_data is None:
+                self.send_error(500, "Failed to encrypt file")
+                return
+            
+            # Send encrypted file
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/octet-stream')
+            self.send_header('Content-Disposition', f'attachment; filename="{filename}.enc"')
+            self.send_header('Content-Length', str(len(encrypted_data)))
+            self.end_headers()
+            self.wfile.write(encrypted_data)
+            
+            print(f"Downloaded file: {filename} (encrypted)")
+            
+        except Exception as e:
+            print(f"Download error: {e}")
+            self.send_error(500, "Download failed")
+    
+    def handle_main_page(self):
         html = '''
         <html><head><title>File Upload</title>
         <style>
@@ -124,8 +215,12 @@ class UploadHandler(BaseHTTPRequestHandler):
             }
         </style>
         </head><body>
-        <h2>Upload Files</h2>
-        <div id="drop-area">
+        <h2>File Upload & Download Server</h2>
+        
+        <!-- Upload Section -->
+        <div style="margin-bottom: 30px;">
+            <h3>Upload Files</h3>
+            <div id="drop-area">
             <div style="margin-bottom: 15px;">
                 <label for="encryption-key" style="display: block; margin-bottom: 5px; font-weight: bold;">Encryption Key:</label>
                 <input type="password" id="encryption-key" placeholder="Enter encryption key" style="width: 100%; max-width: 300px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
@@ -148,8 +243,21 @@ class UploadHandler(BaseHTTPRequestHandler):
             <p>Or drag and drop files here</p>
             <div class="status" id="status"></div>
             <div class="file-list" id="file-list"></div>
+            </div>
+            <div id="response"></div>
         </div>
-        <div id="response"></div>
+        
+        <!-- Download Section -->
+        <div style="margin-bottom: 30px;">
+            <h3>Download Files</h3>
+            <div style="margin-bottom: 15px;">
+                <label for="download-key" style="display: block; margin-bottom: 5px; font-weight: bold;">Decryption Key:</label>
+                <input type="password" id="download-key" placeholder="Enter decryption key" style="width: 100%; max-width: 300px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <button onclick="refreshFileList()" class="btn" style="margin-bottom: 15px;">Refresh File List</button>
+            <div id="download-status" class="status"></div>
+            <div id="available-files" class="file-list"></div>
+        </div>
 
         <script>
             const dropArea = document.getElementById('drop-area');
@@ -158,8 +266,11 @@ class UploadHandler(BaseHTTPRequestHandler):
             const responseBox = document.getElementById('response');
             const statusDiv = document.getElementById('status');
             const fileListDiv = document.getElementById('file-list');
+            const downloadStatusDiv = document.getElementById('download-status');
+            const availableFilesDiv = document.getElementById('available-files');
 
             let selectedFiles = [];
+            let availableFiles = [];
 
             function getEncryptionKey() {
                 const keyInput = document.getElementById('encryption-key');
@@ -174,6 +285,11 @@ class UploadHandler(BaseHTTPRequestHandler):
             function getChunkDelay() {
                 const delayInput = document.getElementById('chunk-delay');
                 return parseInt(delayInput.value) || 0;
+            }
+
+            function getDownloadKey() {
+                const keyInput = document.getElementById('download-key');
+                return keyInput.value.trim();
             }
 
             function sleep(ms) {
@@ -191,6 +307,19 @@ class UploadHandler(BaseHTTPRequestHandler):
                 }
                 
                 return encrypted;
+            }
+
+            // Simple XOR decryption for client-side (same as encryption)
+            function decryptData(encryptedData, key) {
+                const keyBytes = new TextEncoder().encode(key);
+                const dataBytes = new Uint8Array(encryptedData);
+                const decrypted = new Uint8Array(dataBytes.length);
+                
+                for (let i = 0; i < dataBytes.length; i++) {
+                    decrypted[i] = dataBytes[i] ^ keyBytes[i % keyBytes.length];
+                }
+                
+                return decrypted;
             }
 
             async function encryptFile(file, key) {
@@ -348,6 +477,8 @@ class UploadHandler(BaseHTTPRequestHandler):
                       
                       statusDiv.innerHTML = 'All uploads completed!';
                       responseBox.innerHTML = "<pre>All files uploaded successfully</pre>";
+                      // Refresh file list to show newly uploaded files
+                      refreshFileList();
                   } catch (error) {
                       statusDiv.innerHTML = 'Upload failed!';
                       responseBox.innerHTML = "<pre>Error: " + error.message + "</pre>";
@@ -355,6 +486,96 @@ class UploadHandler(BaseHTTPRequestHandler):
                       dropArea.classList.remove('uploading');
                   }
              }
+
+            // File listing and download functions
+            async function refreshFileList() {
+                try {
+                    downloadStatusDiv.innerHTML = 'Loading file list...';
+                    downloadStatusDiv.style.color = '';
+                    
+                    const response = await fetch('/files');
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch file list');
+                    }
+                    
+                    availableFiles = await response.json();
+                    displayFileList();
+                    
+                    downloadStatusDiv.innerHTML = `Found ${availableFiles.length} file(s)`;
+                } catch (error) {
+                    downloadStatusDiv.innerHTML = 'Failed to load file list: ' + error.message;
+                    downloadStatusDiv.style.color = '#dc3545';
+                    availableFilesDiv.innerHTML = '';
+                }
+            }
+
+            function displayFileList() {
+                availableFilesDiv.innerHTML = '';
+                
+                if (availableFiles.length === 0) {
+                    availableFilesDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No files available for download</div>';
+                    return;
+                }
+                
+                availableFiles.forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <span>${file.name} (${file.size_kb} KB)</span>
+                        <button onclick="downloadFile('${file.name}')" class="btn" style="float: right; padding: 5px 10px; font-size: 12px;">Download</button>
+                    `;
+                    availableFilesDiv.appendChild(fileItem);
+                });
+            }
+
+            async function downloadFile(filename) {
+                const downloadKey = getDownloadKey();
+                
+                if (!downloadKey) {
+                    downloadStatusDiv.innerHTML = 'Please enter a decryption key!';
+                    downloadStatusDiv.style.color = '#dc3545';
+                    return;
+                }
+                
+                try {
+                    downloadStatusDiv.innerHTML = `Downloading ${filename}...`;
+                    downloadStatusDiv.style.color = '';
+                    
+                    // Download encrypted file
+                    const response = await fetch(`/download/${encodeURIComponent(filename)}`);
+                    if (!response.ok) {
+                        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+                    }
+                    
+                    const encryptedData = await response.arrayBuffer();
+                    
+                    downloadStatusDiv.innerHTML = `Decrypting ${filename}...`;
+                    
+                    // Decrypt the file
+                    const decryptedData = decryptData(encryptedData, downloadKey);
+                    
+                    // Create and trigger download
+                    const blob = new Blob([decryptedData]);
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    downloadStatusDiv.innerHTML = `Successfully downloaded ${filename}`;
+                    downloadStatusDiv.style.color = '#28a745';
+                    
+                } catch (error) {
+                    downloadStatusDiv.innerHTML = `Download failed: ${error.message}`;
+                    downloadStatusDiv.style.color = '#dc3545';
+                }
+            }
+
+            // Load file list on page load
+            window.addEventListener('load', refreshFileList);
 
             ;['dragenter', 'dragover'].forEach(event => {
                 dropArea.addEventListener(event, e => {
