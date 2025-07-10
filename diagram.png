@@ -1,0 +1,117 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title { font-family: Arial, sans-serif; font-size: 18px; font-weight: bold; fill: #2c3e50; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; fill: #34495e; }
+      .text { font-family: Arial, sans-serif; font-size: 12px; fill: #2c3e50; }
+      .small-text { font-family: Arial, sans-serif; font-size: 10px; fill: #7f8c8d; }
+      .client-box { fill: #3498db; stroke: #2980b9; stroke-width: 2; }
+      .server-box { fill: #e74c3c; stroke: #c0392b; stroke-width: 2; }
+      .process-box { fill: #f39c12; stroke: #e67e22; stroke-width: 2; }
+      .storage-box { fill: #27ae60; stroke: #229954; stroke-width: 2; }
+      .arrow { stroke: #2c3e50; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+      .bi-arrow { stroke: #8e44ad; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2c3e50" />
+    </marker>
+  </defs>
+  
+  <!-- Title -->
+  <text x="400" y="25" text-anchor="middle" class="title">ExfilServer Data Flow Diagram</text>
+  
+  <!-- Client Side -->
+  <text x="100" y="55" class="subtitle">CLIENT SIDE</text>
+  
+  <!-- Web Browser -->
+  <rect x="20" y="70" width="160" height="80" rx="5" class="client-box"/>
+  <text x="100" y="90" text-anchor="middle" class="text">Web Browser</text>
+  <text x="100" y="105" text-anchor="middle" class="small-text">• File Selection</text>
+  <text x="100" y="118" text-anchor="middle" class="small-text">• Drag & Drop</text>
+  <text x="100" y="131" text-anchor="middle" class="small-text">• Key Input</text>
+  <text x="100" y="144" text-anchor="middle" class="small-text">• Download Interface</text>
+  
+  <!-- Client Encryption -->
+  <rect x="20" y="170" width="160" height="60" rx="5" class="process-box"/>
+  <text x="100" y="190" text-anchor="middle" class="text">Client Encryption</text>
+  <text x="100" y="205" text-anchor="middle" class="small-text">• XOR Cipher</text>
+  <text x="100" y="218" text-anchor="middle" class="small-text">• File Chunking</text>
+  
+  <!-- Client Decryption -->
+  <rect x="20" y="250" width="160" height="60" rx="5" class="process-box"/>
+  <text x="100" y="270" text-anchor="middle" class="text">Client Decryption</text>
+  <text x="100" y="285" text-anchor="middle" class="small-text">• Filename Decrypt</text>
+  <text x="100" y="298" text-anchor="middle" class="small-text">• File Content Decrypt</text>
+  
+  <!-- Server Side -->
+  <text x="650" y="55" class="subtitle">SERVER SIDE</text>
+  
+  <!-- HTTP Server -->
+  <rect x="570" y="70" width="160" height="80" rx="5" class="server-box"/>
+  <text x="650" y="90" text-anchor="middle" class="text">HTTP Server</text>
+  <text x="650" y="105" text-anchor="middle" class="small-text">• GET / (Web Interface)</text>
+  <text x="650" y="118" text-anchor="middle" class="small-text">• POST / (File Upload)</text>
+  <text x="650" y="131" text-anchor="middle" class="small-text">• GET /files (File List)</text>
+  <text x="650" y="144" text-anchor="middle" class="small-text">• GET /download/&lt;file&gt;</text>
+  
+  <!-- Server Processing -->
+  <rect x="570" y="170" width="160" height="80" rx="5" class="process-box"/>
+  <text x="650" y="190" text-anchor="middle" class="text">Server Processing</text>
+  <text x="650" y="205" text-anchor="middle" class="small-text">• Chunk Reassembly</text>
+  <text x="650" y="218" text-anchor="middle" class="small-text">• File Decryption</text>
+  <text x="650" y="231" text-anchor="middle" class="small-text">• Filename Encryption</text>
+  <text x="650" y="244" text-anchor="middle" class="small-text">• Download Encryption</text>
+  
+  <!-- File Storage -->
+  <rect x="570" y="270" width="160" height="60" rx="5" class="storage-box"/>
+  <text x="650" y="290" text-anchor="middle" class="text">File Storage</text>
+  <text x="650" y="305" text-anchor="middle" class="small-text">• uploads/ directory</text>
+  <text x="650" y="318" text-anchor="middle" class="small-text">• Original filenames</text>
+  
+  <!-- Network Layer -->
+  <text x="400" y="380" text-anchor="middle" class="subtitle">NETWORK TRANSMISSION</text>
+  
+  <!-- Upload Flow -->
+  <rect x="250" y="400" width="120" height="40" rx="5" class="process-box"/>
+  <text x="310" y="415" text-anchor="middle" class="text">Upload Flow</text>
+  <text x="310" y="430" text-anchor="middle" class="small-text">Encrypted Chunks</text>
+  
+  <!-- Download Flow -->
+  <rect x="430" y="400" width="120" height="40" rx="5" class="process-box"/>
+  <text x="490" y="415" text-anchor="middle" class="text">Download Flow</text>
+  <text x="490" y="430" text-anchor="middle" class="small-text">Encrypted Files</text>
+  
+  <!-- Arrows -->
+  <!-- Upload path -->
+  <path d="M 100 150 L 100 170" class="arrow"/>
+  <path d="M 180 200 L 250 200 L 250 400" class="arrow"/>
+  <path d="M 310 400 L 310 250 L 570 250" class="arrow"/>
+  <path d="M 650 250 L 650 270" class="arrow"/>
+  
+  <!-- Download path -->
+  <path d="M 650 270 L 650 250 L 490 250 L 490 400" class="bi-arrow"/>
+  <path d="M 430 420 L 200 420 L 200 280 L 180 280" class="bi-arrow"/>
+  <path d="M 100 250 L 100 230" class="bi-arrow"/>
+  
+  <!-- File list request -->
+  <path d="M 180 110 L 570 110" class="bi-arrow"/>
+  
+  <!-- Labels for flows -->
+  <text x="220" y="195" class="small-text">1. Encrypt & Chunk</text>
+  <text x="380" y="240" class="small-text">2. Upload</text>
+  <text x="720" y="240" class="small-text">3. Decrypt & Store</text>
+  
+  <text x="380" y="100" class="small-text">File List Request</text>
+  <text x="520" y="240" class="small-text">4. Re-encrypt</text>
+  <text x="300" y="440" class="small-text">5. Download</text>
+  <text x="120" y="240" class="small-text">6. Decrypt & Save</text>
+  
+  <!-- Security Features Box -->
+  <rect x="250" y="480" width="300" height="100" rx="5" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="1"/>
+  <text x="400" y="500" text-anchor="middle" class="subtitle">Security Features</text>
+  <text x="260" y="520" class="small-text">• Bidirectional XOR Encryption</text>
+  <text x="260" y="535" class="small-text">• Encrypted Filename Transmission</text>
+  <text x="260" y="550" class="small-text">• Client-side Key Management</text>
+  <text x="260" y="565" class="small-text">• Chunked Upload with Delays</text>
+  
+</svg>
