@@ -12,7 +12,7 @@ ExfilServer is a secure file upload server that provides client-side encryption 
 <div align="center">
   <img src="example.png" alt="ExfilServer Web Interface" width="600">
   <br>
-  <em>ExfilServer Web Interface - Drag & Drop File Upload with Encryption</em>
+  <em>ExfilServer Web Interface - Drag & Drop File Upload with Encryption and Secure Download with Encrypted Filenames</em>
 </div>
 
 ## ⚠️ Disclaimer
